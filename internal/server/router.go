@@ -1,0 +1,49 @@
+package server
+
+import (
+	"database/sql"
+	"time"
+
+	"auth-service/internal/handler"
+
+	"log/slog"
+
+	"github.com/gin-gonic/gin"
+)
+
+type RouterConfig struct {
+	Logger        *slog.Logger
+	DB            *sql.DB
+	HealthTimeout time.Duration
+}
+
+func NewRouter(cfg RouterConfig) *gin.Engine {
+	router := gin.New()
+	router.Use(gin.Recovery())
+
+	if cfg.Logger != nil {
+		router.Use(requestLogger(cfg.Logger))
+	} else {
+		router.Use(gin.Logger())
+	}
+
+	healthHandler := handler.NewHealthHandler(cfg.DB, cfg.HealthTimeout)
+	router.GET("/healthz", healthHandler.Check)
+
+	return router
+}
+
+func requestLogger(logger *slog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		logger.Info("http request",
+			"status", c.Writer.Status(),
+			"method", c.Request.Method,
+			"path", c.Request.URL.Path,
+			"ip", c.ClientIP(),
+			"latency", time.Since(start),
+		)
+	}
+}
