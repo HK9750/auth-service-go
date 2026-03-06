@@ -40,10 +40,13 @@ func requestLogger(logger *slog.Logger) gin.HandlerFunc {
 
 		logger.Info("http request",
 			"status", c.Writer.Status(),
+			"size", c.Writer.Size(),
 			"method", c.Request.Method,
 			"path", c.Request.URL.Path,
+			"query", c.Request.URL.RawQuery,
 			"ip", c.ClientIP(),
 			"latency", time.Since(start),
+			"user_agent", c.Request.UserAgent(),
 		)
 	}
 }

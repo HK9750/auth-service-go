@@ -38,3 +38,12 @@ func (s *Server) Start() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
+
+func SetGinMode(mode string) {
+	switch mode {
+	case gin.DebugMode, gin.ReleaseMode, gin.TestMode:
+		gin.SetMode(mode)
+	default:
+		gin.SetMode(gin.ReleaseMode)
+	}
+}

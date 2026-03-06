@@ -10,49 +10,70 @@ import (
 	"github.com/google/uuid"
 )
 
-type sessionRepository struct {
+type SessionRepository struct {
 	db *sql.DB
 }
 
-func NewSessionRepository(db *sql.DB) *sessionRepository {
-	return &sessionRepository{db: db}
+func NewSessionRepository(db *sql.DB) *SessionRepository {
+	return &SessionRepository{db: db}
 }
 
-func (r *sessionRepository) Create(ctx context.Context, session *domain.Session) error {
-	query := `
-        INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at, revoked)
+func (r *SessionRepository) Create(ctx context.Context, session *domain.Session) error {
+	if session == nil || session.UserID == uuid.Nil || session.TokenHash == "" {
+		return ErrInvalidArgument
+	}
+
+	const query = `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at, revoked)
         VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, created_at
-    `
+        RETURNING id, created_at`
+
 	row := r.db.QueryRowContext(ctx, query,
-		session.UserID, session.TokenHash, session.IPAddress, session.UserAgent,
-		session.ExpiresAt, session.Revoked,
+		session.UserID,
+		session.TokenHash,
+		session.IPAddress,
+		session.UserAgent,
+		session.ExpiresAt,
+		session.Revoked,
 	)
-	err := row.Scan(&session.ID, &session.CreatedAt)
-	return err
+	return row.Scan(&session.ID, &session.CreatedAt)
 }
 
-func (r *sessionRepository) FindByTokenHash(ctx context.Context, tokenHash string) (*domain.Session, error) {
+func (r *SessionRepository) ByTokenHash(ctx context.Context, tokenHash string) (domain.Session, error) {
+	if tokenHash == "" {
+		return domain.Session{}, ErrInvalidArgument
+	}
+
+	const query = `SELECT id, user_id, token_hash, ip_address, user_agent, expires_at, revoked, created_at
+        FROM sessions WHERE token_hash = $1`
+
 	var session domain.Session
-	query := `SELECT id, user_id, token_hash, ip_address, user_agent, expires_at, revoked, created_at
-              FROM sessions WHERE token_hash = $1`
-	row := r.db.QueryRowContext(ctx, query, tokenHash)
-	err := row.Scan(
-		&session.ID, &session.UserID, &session.TokenHash, &session.IPAddress,
-		&session.UserAgent, &session.ExpiresAt, &session.Revoked, &session.CreatedAt,
+	err := r.db.QueryRowContext(ctx, query, tokenHash).Scan(
+		&session.ID,
+		&session.UserID,
+		&session.TokenHash,
+		&session.IPAddress,
+		&session.UserAgent,
+		&session.ExpiresAt,
+		&session.Revoked,
+		&session.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return domain.Session{}, ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return domain.Session{}, err
 	}
-	return &session, nil
+	return session, nil
 }
 
-func (r *sessionRepository) FindActiveByUserID(ctx context.Context, userID uuid.UUID) ([]domain.Session, error) {
-	query := `SELECT id, user_id, token_hash, ip_address, user_agent, expires_at, revoked, created_at
-              FROM sessions WHERE user_id = $1 AND revoked = false AND expires_at > NOW()`
+func (r *SessionRepository) ActiveByUserID(ctx context.Context, userID uuid.UUID) ([]domain.Session, error) {
+	if userID == uuid.Nil {
+		return nil, ErrInvalidArgument
+	}
+
+	const query = `SELECT id, user_id, token_hash, ip_address, user_agent, expires_at, revoked, created_at
+        FROM sessions WHERE user_id = $1 AND revoked = false AND expires_at > NOW()`
+
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		return nil, err
@@ -62,35 +83,59 @@ func (r *sessionRepository) FindActiveByUserID(ctx context.Context, userID uuid.
 	var sessions []domain.Session
 	for rows.Next() {
 		var s domain.Session
-		err := rows.Scan(
-			&s.ID, &s.UserID, &s.TokenHash, &s.IPAddress,
-			&s.UserAgent, &s.ExpiresAt, &s.Revoked, &s.CreatedAt,
-		)
-		if err != nil {
+		if err := rows.Scan(
+			&s.ID,
+			&s.UserID,
+			&s.TokenHash,
+			&s.IPAddress,
+			&s.UserAgent,
+			&s.ExpiresAt,
+			&s.Revoked,
+			&s.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		sessions = append(sessions, s)
 	}
-	if err = rows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+
 	return sessions, nil
 }
 
-func (r *sessionRepository) Revoke(ctx context.Context, id uuid.UUID) error {
-	query := `UPDATE sessions SET revoked = true WHERE id = $1`
-	_, err := r.db.ExecContext(ctx, query, id)
-	return err
+func (r *SessionRepository) Revoke(ctx context.Context, id uuid.UUID) error {
+	if id == uuid.Nil {
+		return ErrInvalidArgument
+	}
+
+	const query = `UPDATE sessions SET revoked = true WHERE id = $1`
+	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
-func (r *sessionRepository) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
-	query := `UPDATE sessions SET revoked = true WHERE user_id = $1`
+func (r *SessionRepository) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
+	if userID == uuid.Nil {
+		return ErrInvalidArgument
+	}
+
+	const query = `UPDATE sessions SET revoked = true WHERE user_id = $1`
 	_, err := r.db.ExecContext(ctx, query, userID)
 	return err
 }
 
-func (r *sessionRepository) DeleteExpired(ctx context.Context) error {
-	query := `DELETE FROM sessions WHERE expires_at < NOW()`
+func (r *SessionRepository) DeleteExpired(ctx context.Context) error {
+	const query = `DELETE FROM sessions WHERE expires_at < NOW()`
 	_, err := r.db.ExecContext(ctx, query)
 	return err
 }

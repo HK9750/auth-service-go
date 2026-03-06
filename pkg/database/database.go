@@ -23,7 +23,7 @@ func New(cfg Config) (*sql.DB, error) {
 		return nil, errors.New("database DSN is required")
 	}
 
-	if cfg.PingTimeout == 0 {
+	if cfg.PingTimeout <= 0 {
 		cfg.PingTimeout = 5 * time.Second
 	}
 
@@ -32,6 +32,19 @@ func New(cfg Config) (*sql.DB, error) {
 		return nil, err
 	}
 
+	configurePool(db, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.PingTimeout)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return db, nil
+}
+
+func configurePool(db *sql.DB, cfg Config) {
 	if cfg.MaxOpenConns > 0 {
 		db.SetMaxOpenConns(cfg.MaxOpenConns)
 	}
@@ -44,13 +57,4 @@ func New(cfg Config) (*sql.DB, error) {
 	if cfg.MaxLifetime > 0 {
 		db.SetConnMaxLifetime(cfg.MaxLifetime)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.PingTimeout)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-
-	return db, nil
 }

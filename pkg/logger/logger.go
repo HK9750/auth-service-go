@@ -14,11 +14,9 @@ type Config struct {
 func New(cfg Config) *slog.Logger {
 	level := parseLevel(cfg.Level)
 	options := &slog.HandlerOptions{Level: level}
-
 	if strings.EqualFold(cfg.Format, "text") {
 		return slog.New(slog.NewTextHandler(os.Stdout, options))
 	}
-
 	return slog.New(slog.NewJSONHandler(os.Stdout, options))
 }
 

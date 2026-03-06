@@ -15,33 +15,35 @@ import (
 	"auth-service/pkg/config"
 	"auth-service/pkg/database"
 	"auth-service/pkg/logger"
-
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	cfg := config.Load()
-
-	log := logger.New(logger.Config{
-		Level:  cfg.LogLevel,
-		Format: cfg.LogFormat,
-	})
-	slog.SetDefault(log)
-
-	if cfg.GinMode != "" {
-		setGinMode(cfg.GinMode)
+	result := config.Load()
+	if err := config.Require(result.Config); err != nil {
+		panic(err)
 	}
 
+	log := logger.New(logger.Config{Level: result.Config.LogLevel, Format: result.Config.LogFormat})
+	slog.SetDefault(log)
+
+	for _, warning := range result.Warnings {
+		log.Warn("config warning", "warning", warning)
+	}
+
+	if result.Config.GinMode != "" {
+		server.SetGinMode(result.Config.GinMode)
+	}
+	fmt.Print(result.Config)
+
 	var db *sql.DB
-	fmt.Println("Database DSN:", cfg.DatabaseDSN) // Debugging line
-	if cfg.DatabaseDSN != "" {
+	if result.Config.DatabaseDSN != "" {
 		connection, err := database.New(database.Config{
-			DSN:          cfg.DatabaseDSN,
-			MaxOpenConns: cfg.DBMaxOpenConns,
-			MaxIdleConns: cfg.DBMaxIdleConns,
-			MaxIdleTime:  cfg.DBMaxIdleTime,
-			MaxLifetime:  cfg.DBMaxLifetime,
-			PingTimeout:  cfg.DBPingTimeout,
+			DSN:          result.Config.DatabaseDSN,
+			MaxOpenConns: result.Config.DBMaxOpenConns,
+			MaxIdleConns: result.Config.DBMaxIdleConns,
+			MaxIdleTime:  result.Config.DBMaxIdleTime,
+			MaxLifetime:  result.Config.DBMaxLifetime,
+			PingTimeout:  result.Config.DBPingTimeout,
 		})
 		if err != nil {
 			log.Error("database connection failed", "error", err)
@@ -54,24 +56,24 @@ func main() {
 			}
 		}()
 	} else {
-		log.Warn("DATABASE_DSN not set, running without database")
+		log.Warn("database disabled; DATABASE_DSN or DATABASE_URL is empty")
 	}
 
 	router := server.NewRouter(server.RouterConfig{
 		Logger:        log,
 		DB:            db,
-		HealthTimeout: cfg.DBPingTimeout,
+		HealthTimeout: result.Config.DBPingTimeout,
 	})
 
 	srv := server.New(router, server.Config{
-		Address:      cfg.Address,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-		IdleTimeout:  cfg.IdleTimeout,
+		Address:      result.Config.Address,
+		ReadTimeout:  result.Config.ReadTimeout,
+		WriteTimeout: result.Config.WriteTimeout,
+		IdleTimeout:  result.Config.IdleTimeout,
 	})
 
 	go func() {
-		log.Info("http server starting", "addr", cfg.Address)
+		log.Info("http server starting", "addr", result.Config.Address)
 		if err := srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("http server failed", "error", err)
 			os.Exit(1)
@@ -82,20 +84,11 @@ func main() {
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 	<-shutdown
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), result.Config.ShutdownTimeout)
 	defer cancel()
 
 	log.Info("http server shutting down")
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Error("http server shutdown failed", "error", err)
-	}
-}
-
-func setGinMode(mode string) {
-	switch mode {
-	case gin.DebugMode, gin.ReleaseMode, gin.TestMode:
-		gin.SetMode(mode)
-	default:
-		gin.SetMode(gin.ReleaseMode)
 	}
 }
