@@ -15,3 +15,8 @@ type User struct {
 	CreatedAt    time.Time `db:"created_at"`
 	UpdatedAt    time.Time `db:"updated_at"`
 }
+
+type Claims struct {
+	UserID uuid.UUID `json:"user_id"`
+	Email  string    `json:"email"`
+}
