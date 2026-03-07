@@ -62,7 +62,7 @@ func main() {
 	router := server.NewRouter(server.RouterConfig{
 		Logger:        log,
 		DB:            db,
-		HealthTimeout: result.Config.DBPingTimeout,
+		Config:        &result.Config,
 	})
 
 	srv := server.New(router, server.Config{

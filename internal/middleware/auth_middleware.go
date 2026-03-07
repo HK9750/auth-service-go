@@ -13,10 +13,11 @@ func AuthMiddleware(service *service.AuthService) gin.HandlerFunc {
 		token := GetToken(c)
 		claims, err := service.ValidateToken(token)
 		if err != nil {
-			c.AbortWithStatusJSON(401, domain.NewErrorResponse("Invalid token", "INVALID_TOKEN"))
+			c.AbortWithStatusJSON(401, domain.NewErrorResponse("Invalid token", err.Error()))
 			return
 		}
 		c.Set("claims", claims)
+		c.Next()
 	}
 }
 

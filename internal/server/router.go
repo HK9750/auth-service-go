@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"auth-service/internal/handler"
+	"auth-service/pkg/config"
 
 	"log/slog"
 
@@ -12,9 +13,9 @@ import (
 )
 
 type RouterConfig struct {
-	Logger        *slog.Logger
-	DB            *sql.DB
-	HealthTimeout time.Duration
+	Logger *slog.Logger
+	DB     *sql.DB
+	Config *config.Config
 }
 
 func NewRouter(cfg RouterConfig) *gin.Engine {
@@ -27,7 +28,7 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 		router.Use(gin.Logger())
 	}
 
-	healthHandler := handler.NewHealthHandler(cfg.DB, cfg.HealthTimeout)
+	healthHandler := handler.NewHealthHandler(cfg.DB, cfg.Config.DBPingTimeout)
 	router.GET("/healthz", healthHandler.Check)
 
 	return router

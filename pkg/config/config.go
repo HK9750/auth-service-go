@@ -12,20 +12,23 @@ import (
 )
 
 type Config struct {
-	Address         string
-	LogLevel        string
-	LogFormat       string
-	DatabaseDSN     string
-	DBMaxOpenConns  int
-	DBMaxIdleConns  int
-	DBMaxIdleTime   time.Duration
-	DBMaxLifetime   time.Duration
-	DBPingTimeout   time.Duration
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
-	IdleTimeout     time.Duration
-	ShutdownTimeout time.Duration
-	GinMode         string
+	Address              string
+	LogLevel             string
+	LogFormat            string
+	DatabaseDSN          string
+	DBMaxOpenConns       int
+	DBMaxIdleConns       int
+	DBMaxIdleTime        time.Duration
+	DBMaxLifetime        time.Duration
+	DBPingTimeout        time.Duration
+	ReadTimeout          time.Duration
+	WriteTimeout         time.Duration
+	IdleTimeout          time.Duration
+	ShutdownTimeout      time.Duration
+	GinMode              string
+	JWTSecret            string
+	JWTExpiration        time.Duration
+	JWTRefreshExpiration time.Duration
 }
 
 type LoadResult struct {
@@ -37,20 +40,23 @@ func Load() LoadResult {
 	_ = godotenv.Load()
 
 	cfg := Config{
-		Address:         envString("SERVER_ADDR", ":8080"),
-		LogLevel:        envString("LOG_LEVEL", "info"),
-		LogFormat:       envString("LOG_FORMAT", "json"),
-		DatabaseDSN:     envString("DATABASE_DSN", ""),
-		DBMaxOpenConns:  envInt("DB_MAX_OPEN_CONNS", 10),
-		DBMaxIdleConns:  envInt("DB_MAX_IDLE_CONNS", 10),
-		DBMaxIdleTime:   envDuration("DB_MAX_IDLE_TIME", 15*time.Minute),
-		DBMaxLifetime:   envDuration("DB_MAX_LIFETIME", 30*time.Minute),
-		DBPingTimeout:   envDuration("DB_PING_TIMEOUT", 5*time.Second),
-		ReadTimeout:     envDuration("SERVER_READ_TIMEOUT", 10*time.Second),
-		WriteTimeout:    envDuration("SERVER_WRITE_TIMEOUT", 10*time.Second),
-		IdleTimeout:     envDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
-		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
-		GinMode:         envString("GIN_MODE", "release"),
+		Address:              envString("SERVER_ADDR", ":8080"),
+		LogLevel:             envString("LOG_LEVEL", "info"),
+		LogFormat:            envString("LOG_FORMAT", "json"),
+		DatabaseDSN:          envString("DATABASE_DSN", ""),
+		DBMaxOpenConns:       envInt("DB_MAX_OPEN_CONNS", 10),
+		DBMaxIdleConns:       envInt("DB_MAX_IDLE_CONNS", 10),
+		DBMaxIdleTime:        envDuration("DB_MAX_IDLE_TIME", 15*time.Minute),
+		DBMaxLifetime:        envDuration("DB_MAX_LIFETIME", 30*time.Minute),
+		DBPingTimeout:        envDuration("DB_PING_TIMEOUT", 5*time.Second),
+		ReadTimeout:          envDuration("SERVER_READ_TIMEOUT", 10*time.Second),
+		WriteTimeout:         envDuration("SERVER_WRITE_TIMEOUT", 10*time.Second),
+		IdleTimeout:          envDuration("SERVER_IDLE_TIMEOUT", 60*time.Second),
+		ShutdownTimeout:      envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
+		GinMode:              envString("GIN_MODE", "release"),
+		JWTSecret:            envString("JWT_SECRET", "defaultsecret"),
+		JWTExpiration:        envDuration("JWT_EXPIRATION", 12*time.Hour),
+		JWTRefreshExpiration: envDuration("JWT_REFRESH_EXPIRATION", 7*24*time.Hour),
 	}
 
 	if cfg.DatabaseDSN == "" {
@@ -97,6 +103,15 @@ func validate(cfg Config) []string {
 	}
 	if cfg.DBPingTimeout < 0 {
 		warnings = append(warnings, "DB_PING_TIMEOUT must be >= 0")
+	}
+	if cfg.JWTSecret == "" {
+		warnings = append(warnings, "JWT_SECRET is empty")
+	}
+	if cfg.JWTExpiration <= 0 {
+		warnings = append(warnings, "JWT_EXPIRATION must be positive")
+	}
+	if cfg.JWTRefreshExpiration <= 0 {
+		warnings = append(warnings, "JWT_REFRESH_EXPIRATION must be positive")
 	}
 	return warnings
 }
