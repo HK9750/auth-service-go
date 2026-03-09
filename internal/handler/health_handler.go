@@ -14,6 +14,21 @@ type HealthHandler struct {
 	timeout time.Duration
 }
 
+type DBStatus string
+
+var (
+	DBStatusOK          DBStatus = "ok"
+	DBStatusUnreachable DBStatus = "unreachable"
+	DBStatusSkipped     DBStatus = "skipped"
+)
+
+type HealthStatus string
+
+var (
+	HealthStatusOK       HealthStatus = "ok"
+	HealthStatusDegraded HealthStatus = "degraded"
+)
+
 func NewHealthHandler(db *sql.DB, timeout time.Duration) *HealthHandler {
 	if timeout <= 0 {
 		timeout = 2 * time.Second
@@ -27,7 +42,7 @@ func NewHealthHandler(db *sql.DB, timeout time.Duration) *HealthHandler {
 
 func (h *HealthHandler) Check(c *gin.Context) {
 	if h.db == nil {
-		c.JSON(http.StatusOK, gin.H{"status": "ok", "db": "skipped"})
+		c.JSON(http.StatusOK, gin.H{"status": HealthStatusOK, "db": DBStatusSkipped})
 		return
 	}
 
@@ -35,9 +50,9 @@ func (h *HealthHandler) Check(c *gin.Context) {
 	defer cancel()
 
 	if err := h.db.PingContext(ctx); err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "degraded", "db": "unreachable"})
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": HealthStatusDegraded, "db": DBStatusUnreachable})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "db": "ok"})
+	c.JSON(http.StatusOK, gin.H{"status": HealthStatusOK, "db": DBStatusOK})
 }

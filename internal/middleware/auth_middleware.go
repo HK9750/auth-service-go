@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func AuthMiddleware(service *service.AuthService) gin.HandlerFunc {
+func AuthMiddleware(service *service.TokenService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := GetToken(c)
 		claims, err := service.ValidateToken(token)
