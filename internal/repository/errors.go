@@ -4,6 +4,7 @@ import "errors"
 
 var (
 	ErrInvalidArgument    = errors.New("invalid argument")
+	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrNotFound           = errors.New("not found")
 	ErrUnauthorized       = errors.New("unauthorized")
 	ErrForbidden          = errors.New("forbidden")
